@@ -1,1 +1,8 @@
 SR3:
+
+To perform the test cases, below jar parckages are required.
+
+FreePastry-2.1.jar
+commons-io-2.6.jar
+commons-lang-2.6.jar
+Storm package needs to use the forked version in our lab respository: https://github.com/fiu-elves/storm
