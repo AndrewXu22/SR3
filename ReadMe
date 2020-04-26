@@ -1,8 +1,13 @@
 SR3:
 
-To perform the test cases, below jar parckages are required.
+Welcome to use the customizable recovery for stateful stream applications
 
-FreePastry-2.1.jar
-commons-io-2.6.jar
-commons-lang-2.6.jar
-Storm package needs to use the forked version in our lab respository: https://github.com/fiu-elves/storm
+We list the requirements of test and steps of functionality
+
+Step: 1 Requirements
+(a) The system should be implemented upon multiple servers. We sugeest to use at least 5 servers/VMs/EC2 machines to deploy it
+(b) Before deploy it, make sure the servers are Linux OS and with Java 1.8 installed
+(c) The system requires jar packages. We lists the packages here: FreePastry-2.1.jar, commons-io-2.6.jar, commons-lang-2.6.jar,Storm package needs to use the forked version in our lab respository: https://github.com/fiu-elves/storm
+
+Step: 2 Deployment
+(a) The system uses eho0 port to communicate at runtime, you need to identify the part that the system can use, e.g., 10.128.65.xxx. This info should be changed in the code where Pastry builds many nodes.
