@@ -1,6 +1,6 @@
 Welcome to SR3: customizable recovery for stateful stream applications
 
-We list the requirements of test and steps of functionality
+We list the requirements of test and steps of functionality:
 
 Requirements
 (a) The system should be implemented upon multiple servers. We sugeest to use at least 5 servers/VMs/EC2 machines to deploy it
