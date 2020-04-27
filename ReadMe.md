@@ -1,8 +1,12 @@
 # Welcome to SR3: customizable recovery for stateful stream applications
 
-## We list the requirements of test and steps of functionality:
+## Runtime Environment:
 
-### Requirements
+* OS: Linux
+* Machine: local servers or Amazon EC2 machines
+* Requirements: Java 1.8, Pastry, Strom
+
+### Packages and Requirements
 - The system should be implemented upon multiple servers. We sugeest to use at least 5 servers/VMs/EC2 machines to deploy it
 - Before deploy it, make sure the servers are Linux OS and with Java 1.8 installed
 - The system requires jar packages. We lists the packages here: 
