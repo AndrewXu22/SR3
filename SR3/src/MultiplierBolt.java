@@ -20,8 +20,8 @@ public class MultiplierBolt extends BaseRichBolt {
         try {
             saveState(input);
             String stateFileName = getStateFileName();
-            // [PL20200407]This is used for RS3 testing
-			// You need to change the ip to your server ip address.
+            // This is used for RS3 testing
+	    // You need to change the ip to your server ip address (eth0).
             pastry_main pastryMain = new pastry_main(stateFileName, 9001, "192.168.204.132", 9001, 10);
         } catch (Exception e) {
             e.printStackTrace();
