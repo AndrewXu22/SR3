@@ -20,15 +20,11 @@ public class TreeStateMerge  {
 	//public static int numSpl;
 	
 	public TreeStateMerge(String filepath) throws IOException {
-        StateMerge.filePath1 = filepath;
-        //FileMerge.numSpl = numSpl;
-	    }
-	
-	
-	
+        	StateMerge.filePath1 = filepath;
+	}
+		
 	public void stateMerger() throws IOException {
 		String FILE_NAME = StateMerge.filePath1 + File.separator + "original_data.txt";
-		//File ofile = new File(FILE_NAME);
 		FileOutputStream fos;
 		FileInputStream fis;
 		byte[] fileBytes;
@@ -92,13 +88,6 @@ public class TreeStateMerge  {
 					  part_map.put(firstPart, fileName);
 					  System.out.println("I find the " + firstPart + " part!");
 				  }
-				  //if (indexPart[numPart] != firstPart || firstPart == 0 ) {// note that this part has not been merged
-					  //if (firstPart != 0 )
-						  //System.out.println("Oops, it doesnot start with first part, it starts with " + firstPart + " part!");
-					  //indexPart[numPart] = firstPart;
-					  //System.out.println("I am now merging the " + firstPart + " part!");
-					  //list.add(new File(filePath+"\\replica_part_"+parts[2]));
-				  //}
 			  }
 		  }
 		  
@@ -110,9 +99,6 @@ public class TreeStateMerge  {
 					System.out.println("we have the part: " + m.getKey() +" and next part: " + part_map.higherEntry(m.getKey()).getKey() + " size of part_map: " + part_map.size());
 					int j = part_map.higherEntry(m.getKey()).getKey() - 1 ;
 					if (part_map.size() > 1 && m.getKey() == j  ) { // here to check if this two parts are consecutive
-						//list.add(new File(filePath + "\\" + m.getValue()));
-						//Map.Entry<Integer, String> next = part_map.higherEntry(m.getKey());
-						//list.add(new File(filePath + "\\" + next.getValue()));
 						merge_map.put(m.getKey(), m.getValue());
 					}else if ( merge_map.size()>=2 && merge_map.size() != part_map.size() ) {// here merge the consecutive parts in the node
 						Entry<Integer, String> begin = merge_map.firstEntry();
