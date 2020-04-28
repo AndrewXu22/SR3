@@ -346,7 +346,7 @@ public void deliver (Id id, Message message) {
 			//*/
 			// only used for linear and tree recovery
 			// keep this part to let root node calculates the aggregation latency for the state and save to a file
-			/*
+			///*
 			FileWriter fw1;
 			try {
 				fw1 = new FileWriter(rootTimeFile, true);
@@ -361,7 +361,7 @@ public void deliver (Id id, Message message) {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
-			*/
+			//*/
 			
 		  }
 	  if (message instanceof RootSendSpeNodeMessage){
@@ -558,7 +558,7 @@ public void deliver (Id id, Message message) {
 						this.countNum = this.countNum - listOfFiles.length;
 					}
 				}				
-				/*
+				///*
 				// here send the parts to its parents, if has no parent then check if gather all parts
 				File[] listOfFiles = directory.listFiles();
 				NodeHandle nh= this.getParent();
@@ -608,14 +608,13 @@ public void deliver (Id id, Message message) {
 					}
 					
 				}
-				*/
+				//*/
 		  }					
 	}			
 	  /*
-	   * TreeMessage is used for tree-parallel recovery
-	   * This is one unfinished version, need to be modified later
+	   * TreeMessage is used for tree-structured recovery
 	   */
-	  /*
+	  ///*
 	  if (message instanceof TreeMessage) {
 		  //here is for child node received msg from root, then send specific replica to its parents
 		  // used for tree-based recovery
@@ -794,7 +793,7 @@ public void deliver (Id id, Message message) {
 			  }
 			 
 		  }	
-	  */
+	 // */
 	  if (message instanceof LinearCollectMessage){		  	
 			/*
 			 * Here is for line recovery
