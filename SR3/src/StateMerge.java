@@ -67,18 +67,18 @@ public class StateMerge  {
 			  String[] parts = file.split("_");
 			  
 			  
-			  if(parts.length > 1) { // means it has the "part" info, need to be merged
+			  if(parts.length > 1) { // means it has the "shard" info, need to be merged
 				  int firstPart = Integer.parseInt(parts[1])/10;// get the xx value of partxx
 				  
 				  if (part_map.get(firstPart) == null) {
 					  part_map.put(firstPart, file);
-					  System.out.println("I find the " + firstPart + " part!");
+					  System.out.println("I find the " + firstPart + " shard!");
 				  }
 				  //if (indexPart[numPart] != firstPart || firstPart == 0 ) {// note that this part has not been merged
 					  //if (firstPart != 0 )
-						  //System.out.println("Oops, it doesnot start with first part, it starts with " + firstPart + " part!");
+						  //System.out.println("Oops, it doesnot start with first shard, it starts with " + firstPart + " part!");
 					  //indexPart[numPart] = firstPart;
-					  //System.out.println("I am now merging the " + firstPart + " part!");
+					  //System.out.println("I am now merging the " + firstPart + " shard!");
 					  //list.add(new File(filePath+"\\replica_part_"+parts[2]));
 				  //}
 			  }
