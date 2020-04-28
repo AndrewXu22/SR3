@@ -18,11 +18,6 @@ public class ReplicaSaveMessage implements ScribeContent, Message {
 		this.content = content;
 		
 	}
-	/*
-	public String toString(){
-		return "Scribe message"+ seq+ " from "+from;
-	}
-	*/
 
 	@Override
 	public int getPriority() {
