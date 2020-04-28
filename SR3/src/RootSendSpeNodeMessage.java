@@ -21,11 +21,6 @@ public class RootSendSpeNodeMessage implements Message {
 		this.time = time;
 		
 	}
-	/*
-	public String toString(){
-		return "Scribe message"+ seq+ " from "+from;
-	}
-	*/
 
 	@Override
 	public int getPriority() {
