@@ -23,5 +23,5 @@ public class IntegerSpout extends BaseRichSpout {
 
     public void declareOutputFields(OutputFieldsDeclarer declarer) {
         declarer.declare(new Fields("field"));
-    }
+    } 
 }
