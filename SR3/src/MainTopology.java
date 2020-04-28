@@ -22,7 +22,7 @@ public class MainTopology {
             e.printStackTrace();
         }
         finally {
-            //cluster.shutdown();
+            //cluster.shutdown(); 
         }
     }
 }
