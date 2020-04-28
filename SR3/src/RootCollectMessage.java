@@ -22,11 +22,6 @@ public class RootCollectMessage implements ScribeContent, Message {
 		this.time = time;
 		
 	}
-	/*
-	public String toString(){
-		return "Scribe message"+ seq+ " from "+from;
-	}
-	*/
 
 	@Override
 	public int getPriority() {
