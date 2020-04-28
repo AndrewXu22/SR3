@@ -13,8 +13,7 @@ public class MyPastContent extends ContentHashPastContent {
    * Note that this class is Serializable, so any non-transient field will 
    * automatically be stored to to disk.
    */
-  String content;
-    
+  String content;   
   /**
    * Takes an environment for the timestamp
    * An IdFactory to generate the hash
