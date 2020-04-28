@@ -34,11 +34,9 @@ public class StateSplit {
 	    }
 	
 	String FILE_NAME = filePath;
-	//byte PART_SIZE = PART_SIZE1;
 	
 	public int stateSpliter() throws IOException  {
 		File inputFile = new File(filePath);
-		//System.out.println(filePath);
 		FileInputStream inputStream;
 		String newFileName;
 		FileOutputStream filePart;
@@ -88,7 +86,7 @@ public class StateSplit {
 		for (i = 0; i <= part_size; i++)
 		{
 			String sourceFile = filePath+".part_" + i + "0";
-			int replica = num; // number of replica for each part
+			int replica = num; // number of replica for each shard
 			
 
 			for (j = 0; j < replica; j++) {
@@ -110,6 +108,5 @@ public class StateSplit {
 			}
 		}
 		
-
 	}
 }
