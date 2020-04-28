@@ -86,20 +86,6 @@ public class pastry_main {
 	      	}
 	      	System.out.println("Finished creating new node: " + node);
 	    	}
-	    /*
-	    long treeEndTime = System.currentTimeMillis() - treeStartTime;
-	    FileWriter fw;
-		try {
-			fw = new FileWriter("D:/Eclipse workplace/TreeBuildTime.txt", true);
-			BufferedWriter bw = new BufferedWriter(fw);
-		    PrintWriter out = new PrintWriter(bw);			 
-		    out.println( "Build the tree takes  " +treeEndTime );			
-		    out.close();
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-		*/
 	    // for the first app subscribe then start the publishtask
 	    Iterator<MultipleNodeApplication> i = apps.iterator();
 	    MultipleNodeApplication app = (MultipleNodeApplication) i.next();
@@ -111,10 +97,6 @@ public class pastry_main {
 	      app = (MultipleNodeApplication) i.next();
 	      app.subscribe();
 	    }
-	    
-	 // now, print the tree
-	    //env.getTimeSource().sleep(2000);
-	   // printTree(apps);
   }
   
   /**
