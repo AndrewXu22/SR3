@@ -20,13 +20,9 @@ public class MultiplierBolt extends BaseRichBolt {
         try {
             saveState(input);
             String stateFileName = getStateFileName();
-            // Save state to db.
-//            SaveStateToDB saveStateToDB = new SaveStateToDB(stateFileName);
-            // Save state directly to Past.
-//            SaveStateToPastry saveStateToPastry = new SaveStateToPastry(stateFileName, "2001", "192.168.204.253", "2001", "200");
-            // Save state to HDFS.
-            SaveStateToHdfs saveStateToHdfs = new SaveStateToHdfs(stateFileName);
-
+            // [PL20200407]This is used for RS3 testing
+			// You need to change the ip to your server ip address.
+            pastry_main pastryMain = new pastry_main(stateFileName, 9001, "192.168.204.132", 9001, 10);
         } catch (Exception e) {
             e.printStackTrace();
         }

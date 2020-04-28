@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map.Entry;
+import java.util.Random;
 import java.util.Scanner;
 import java.util.TreeMap;
 import java.util.Vector;
@@ -49,6 +50,8 @@ public class MultipleNodeApplication implements ScribeClient, Application {
   // current path is used for node to creat new folder
   //String currentPath = "D:\\Eclipse workplace\\pastry_replica_test";
   String currentPath = "/home/hxu017/Eclipse_workplace";
+  //String currentPath = "/Users/hailuxu/Downloads/Research file/2020_Spring/pastry_replica/pastry_replica_test";
+  
   TreeMap<Integer, List<Id>> part_map = new TreeMap<Integer, List<Id>>();
   
   List<String> TheList = new ArrayList<String>();
@@ -56,13 +59,17 @@ public class MultipleNodeApplication implements ScribeClient, Application {
   // countNum to record the number of parts that root already collected
   int rootCollectedNum = 0;
   
-  int numParts = 1024; // denote the kb data of a part, e.g., 1024kb = 1mb
+  String appName; //Here is for the application name 
+  int numParts = 512; // denote the kb data of a part, e.g., 1024kb = 1mb
   int numReplica = 2; // denote how many replicas for one part
   int numSpli =0; //use for root to record how many parts for a file
+  int lengthPath = 0; //here is used for user to define the length of recovery path
+  String latencyRequire;//here for define the latency requirement of app
   
   //---------------------------------------------------------------------
   // countNum to record the number of received value
   int countNum = 0;
+  int countReplica = 0; //user for node to record how many replica it received
   
   int bindport =0;
   
@@ -113,7 +120,7 @@ public class MultipleNodeApplication implements ScribeClient, Application {
 	  //if (this.myScribe.isRoot(myTopic)){
           
 		  //sendMultiCast();
-		  publishTask = endpoint.scheduleMessage(new PublishContent(), 5000, 12000);
+		  publishTask = endpoint.scheduleMessage(new PublishContent(), 20000, 30000);
 		  System.out.println("---------------------------------------------------------------------------------------------------------");
 		  System.out.println(endpoint.getId() + " :I am ROOT and start to split state and save to my childrens");
 		  
@@ -140,13 +147,16 @@ public void deliver (Id id, Message message) {
 			  //byte numParts = 50; // denote the number of parts of a file
 			  //int numReplica = 2; // denote how many replicas for one part
 			  
-			  String filePath = currentPath +  File.pathSeparator + "state.txt";
+			  NodeHandle[] childList = this.getChildren();
+			  System.out.println("my child list is: " + childList);
+			  
+			  String filePath = currentPath +  File.separator + "state.txt";
 			  String fileListPath= currentPath;
 			  try {
-				FileSplit file = new FileSplit(filePath, numParts);
+				StateSplit file = new StateSplit(filePath, numParts);
 				//FileSplit.splitFile(filePath, numParts, numReplica);
-				numSpli = file.fileSpliter();
-				System.out.println("Already splite the file!");
+				numSpli = file.stateSpliter();
+				System.out.println("Already partition the state!");
 				file.makeReplica(numReplica);
 			} catch (IOException e1) {
 				// TODO Auto-generated catch block
@@ -159,7 +169,7 @@ public void deliver (Id id, Message message) {
 			  int numChildren = myScribe.numChildren(myTopic);
 			  System.out.println(nhlist);
 			  System.out.println("I have "+ numChildren + " children nodes.");
-			  
+			  long startTime = System.currentTimeMillis();
 			  //here anycast the replica of each part to the following nodes
 			  try {
 				  File directory = new File(fileListPath);
@@ -171,8 +181,21 @@ public void deliver (Id id, Message message) {
 					String extension = FilenameUtils.getExtension(fileName);// saves the name of each part
 					
 					if (extension.contains("part")) {
+						//Just in case too many msgs, some node may not receive
+						Random random = new Random();
+						int k = random.nextInt(200);
+						try
+						{
+						    Thread.sleep(k); //wait for 5ms for waiting replicas
+						}
+						catch(InterruptedException ex)
+						{
+						    Thread.currentThread().interrupt();
+						}
+						
+						
 						String content = new Scanner(file).useDelimiter("\\Z").next();
-						ScribeMessage myMessage = new ScribeMessage(this.endpoint.getId(), this.endpoint.getId(), content, extension);
+						ScribeMessage myMessage = new ScribeMessage(this.endpoint.getId(), this.endpoint.getId(), content, extension, startTime);
 						//NodeHandle nh= endpoint.getLocalNodeHandle();
 						//myScribe.anycast(myTopic, myMessage, nh);
 						myScribe.anycast(myTopic, myMessage);
@@ -191,50 +214,61 @@ public void deliver (Id id, Message message) {
 			  System.out.println("Okay! Let's aggregate the original file");
 			  long startTime = System.currentTimeMillis();
 			  /*
-			   * Here we ask send to root(see details in RootSendSpeNodeMessage): centralized recovery
-			   * ask send to parent(see details in xxx): tree-based recovery
-			   * ask send to next part(see details in LinearCollectMessage): linear recovery
+			   * Here we ask send to root(see details in RootSendSpeNodeMessage): star-structured recovery
+			   * ask send to parent(see details in xxx): tree-structured recovery
+			   * ask send to next part(see details in LinearCollectMessage): line-structured recovery
 			   */
+			  int  recoveryStructure = recoverySelection(appName, numParts, lengthPath, latencyRequire);
 			  /*
-			   * here for centralized recovery: root finds all node who have the specific part and ask them to send
+			   * here for star-structured recovery: root finds all node who have the specific shard and ask them to send
 			   */
-			   ///*			  
-			  for (Entry<Integer, List<Id>> entry : part_map.entrySet()) {
+			  if (recoveryStructure == 1){
+				  for (Entry<Integer, List<Id>> entry : part_map.entrySet()) {
+					     System.out.println("Key: " + entry.getKey() + ". Value: " + entry.getValue());
+					     entry.getValue().get(0);
+					     String partName = "part"+ entry.getKey();
+					     RootSendSpeNodeMessage myMessage = new RootSendSpeNodeMessage(this.endpoint.getId(), entry.getKey(), this.endpoint.getId(), contentPart, partName, startTime);
+						 endpoint.route(entry.getValue().get(0), myMessage, null);
+					}
+			  }			  
+			  //*/
+			  //now for line-structured recovery
+			  if (recoveryStructure == 2){
+				  Entry<Integer,List<Id>> entry = part_map.firstEntry();
+				  if (entry.getKey() == 0) {
 				     System.out.println("Key: " + entry.getKey() + ". Value: " + entry.getValue());
 				     entry.getValue().get(0);
 				     String partName = "part"+ entry.getKey();
-				     RootSendSpeNodeMessage myMessage = new RootSendSpeNodeMessage(this.endpoint.getId(), entry.getKey(), this.endpoint.getId(), contentPart, partName, startTime);
+				     LinearCollectMessage myMessage = new LinearCollectMessage(this.endpoint.getId(), this.endpoint.getId(), entry.getKey(), numSpli, null, startTime);
 					 endpoint.route(entry.getValue().get(0), myMessage, null);
-				}
-				//*/
-			  //now for linear recovery
-			  /*
-			  Entry<Integer,List<Id>> entry = part_map.firstEntry();
-			  if (entry.getKey() == 0) {
-			     System.out.println("Key: " + entry.getKey() + ". Value: " + entry.getValue());
-			     entry.getValue().get(0);
-			     String partName = "part"+ entry.getKey();
-			     LinearCollectMessage myMessage = new LinearCollectMessage(this.endpoint.getId(), this.endpoint.getId(), entry.getKey(), numSpli, null, startTime);
-				 endpoint.route(entry.getValue().get(0), myMessage, null);
+				  }
 			  }
-			  */
-			  //now for tree_based recovery
+			  //now for tree-structured recovery
 			  // here root checks its treemap and find which node for each part, then asks that node delivers its part to the parent
 			  // note a replica for specific part only send once, so that there is no overlap in the parent
-			  /*
-			  int replica_no = 0;
-			  for (Entry<Integer, List<Id>> entry : part_map.entrySet()) {
-				  if (entry.getKey() == replica_no) {
-				     System.out.println("Key: " + entry.getKey() + ". Value: " + entry.getValue());
-				     entry.getValue().get(0);
-				     String partName = "part"+ entry.getKey();
-				     //here ask this node sends this replica to parent
-				     TreeMessage myMessage = new TreeMessage(this.endpoint.getId(), entry.getKey(), null, "send the replica", startTime);
-					 endpoint.route(entry.getValue().get(0), myMessage, null);
-					 replica_no++;
-				  }	
+			  if (recoveryStructure == 3){
+				  int replica_no = 0;
+				  for (Entry<Integer, List<Id>> entry : part_map.entrySet()) {
+					  //if (entry.getKey() == replica_no) {
+					  	Random random = new Random();
+						int k = random.nextInt(50);
+						try
+						{
+						    Thread.sleep(k); //wait for 5ms for waiting replicas
+						}
+						catch(InterruptedException ex)
+						{
+						    Thread.currentThread().interrupt();
+						}
+					     System.out.println("Key: " + entry.getKey() + ". Value: " + entry.getValue());
+					     entry.getValue().get(0);
+					     //String partName = "part"+ entry.getKey();
+					     //here ask this node sends this replica to parent
+					     TreeMessage myMessage = new TreeMessage(this.endpoint.getId(), numSpli, entry.getKey(), null, "send the replica", startTime);
+						 endpoint.route(entry.getValue().get(0), myMessage, null);
+						 replica_no++;
+				  }
 			  }
-			   */
 		  }
 		
 	  }
@@ -243,15 +277,23 @@ public void deliver (Id id, Message message) {
 		    System.out.println("==================###### Root ######================================");
 			System.out.println(endpoint.getId()+" : receive the part from node " +((RootCollectMessage) message).from); 
 			
-			String newPath= currentPath + File.pathSeparator + "R_" + endpoint.getId().toString().replaceAll("[^a-zA-Z0-9]", "");			
+			String newPath= currentPath + File.separator + "R_" + endpoint.getId().toString().replaceAll("[^a-zA-Z0-9]", "");			
 	  		
 	  		File directory = new File(String.valueOf(newPath));
 	  		if(!directory.exists()){
 	  			new File(newPath).mkdirs();
 	  		}
 	  		FileWriter fw;
-	  		String fileName = newPath + File.pathSeparator + "replica_" + ((RootCollectMessage) message).partName;
-	  		String rootTimeFile = newPath + File.pathSeparator + "rootAggregationTime.txt";
+	  		String fileName = newPath + File.separator + "replica_" + ((RootCollectMessage) message).partName;
+	  		
+	  		String rootTimeFile = newPath + File.separator + "merge_results"+ File.separator + "rootAggregationTime.txt";
+			String rootTimeDir = newPath + File.separator + "merge_results";
+
+	  		File directory2 = new File(String.valueOf(rootTimeDir));
+	  		if(!directory2.exists()){
+	  			new File(rootTimeDir).mkdirs();
+	  		}
+
 			try {
 				fw = new FileWriter(fileName, false);
 				BufferedWriter bw = new BufferedWriter(fw);
@@ -281,9 +323,9 @@ public void deliver (Id id, Message message) {
 			if (rootCollectedNum == (numSpli+1)) {
 				//here aggregate all parts
 				try {
-					FileMerge file = new FileMerge(newPath, numSpli);
+					StateMerge file = new StateMerge(newPath, numSpli);
 					System.out.println(endpoint.getId()+ newPath);
-					file.fileMerger();
+					file.stateMerger();
 					System.out.println(endpoint.getId()+ " :Already merge the file!");
 					//here root node calculates the aggregation latency for the state and save to a file
 					FileWriter fw1;
@@ -298,7 +340,8 @@ public void deliver (Id id, Message message) {
 				} catch (IOException e) {
 					// TODO Auto-generated catch block
 					e.printStackTrace();
-				}		
+				}
+				this.rootCollectedNum = 0;
 			}			
 			//*/
 			// only used for linear and tree recovery
@@ -335,8 +378,7 @@ public void deliver (Id id, Message message) {
 		  for (File file : listOfFiles) { 
 			  String fileName = file.getName();
 			  String[] parts = fileName.split("_");
-			  
-			  
+			  			  
 			  if(parts.length > 1) { // means it has the "part" info, need to be merged
 				  int firstPart = Integer.parseInt(parts[1])/10;// get the xx value of partxx
 				  
@@ -363,6 +405,7 @@ public void deliver (Id id, Message message) {
 					}						  
 				  }
 			  }
+  				
 		  }
 			
 		
@@ -371,14 +414,14 @@ public void deliver (Id id, Message message) {
 	  if (message instanceof ParentCollectMessage){
 		  	// this is used for the tree-aggregation partition, not the centralized or linear aggregation
 		  	//here for parent node receive the part of file from its children, so it can aggregate parts 
-		  	String newPath= currentPath + File.pathSeparator + "P_" + endpoint.getId().toString().replaceAll("[^a-zA-Z0-9]", "");			
+		  	String newPath= currentPath + File.separator + "P_" + endpoint.getId().toString().replaceAll("[^a-zA-Z0-9]", "");			
 	  		
 	  		File directory = new File(String.valueOf(newPath));
 	  		if(!directory.exists()){
 	  			new File(newPath).mkdirs();
 	  		}
 	  		FileWriter fw;
-	  		String fileName = newPath + File.pathSeparator + "replica_" + ((RootCollectMessage) message).partName;
+	  		String fileName = newPath + File.separator + "replica_" + ((RootCollectMessage) message).partName;
 			try {
 				fw = new FileWriter(fileName, false);
 				BufferedWriter bw = new BufferedWriter(fw);
@@ -394,11 +437,14 @@ public void deliver (Id id, Message message) {
 			
 			
 	  }
+	  /*
+	   * This is only for tree-based collection of parts
+	   */
 	  if (message instanceof TreeMessage) {
 		  //here is for child node received msg from root, then send specific replica to its parents
 		  // used for tree-based recovery
 		  if ( ((TreeMessage) message).mergeName == null){ // leaf nodes or parent nodes that have parts
-			  	String newPath = currentPath + File.pathSeparator + endpoint.getId().toString().replaceAll("[^a-zA-Z0-9]", "");
+			  	String newPath = currentPath + File.separator + endpoint.getId().toString().replaceAll("[^a-zA-Z0-9]", "");
 				//for the first node who has the first part, just send to next
 				File directory = new File(newPath);
 				File[] listOfFiles = directory.listFiles();
@@ -408,16 +454,16 @@ public void deliver (Id id, Message message) {
 					if(parts.length > 1) { // means it has the "part"
 						  int firstPart = Integer.parseInt(parts[1])/10;// get the xx value of partxx
 						  
-						  if (firstPart == ((TreeMessage) message).key ) { 
+						  if (firstPart == ((TreeMessage) message).key ) { //find the part that should send to its parent
 							  try {
 								String content_new = new Scanner(file).useDelimiter("\\Z").next();
 								String partName = parts[1];
-								TreeMessage myMessage2 = new TreeMessage(this.endpoint.getId(), firstPart, partName, content_new, ((TreeMessage) message).time);
+								TreeMessage myMessage2 = new TreeMessage(((TreeMessage) message).from, ((TreeMessage) message).numPart, 1, partName, content_new, ((TreeMessage) message).time);
 								NodeHandle nh= this.getParent();
 								
 								if (nh == null) {//here it is the root of the tree, may not be the root of this topic, so it moves the replica to received path
 									System.out.println(endpoint.getId()+ " I have no parent, so I just move my file: "+ file.getName());
-									String move_newPath= newPath + "/received";					  		
+									String move_newPath= newPath + File.separator + "received";					  		
 							  		File move_directory = new File(String.valueOf(move_newPath));
 							  		if(!move_directory.exists()){
 							  			new File(move_newPath).mkdirs();
@@ -427,7 +473,183 @@ public void deliver (Id id, Message message) {
 									InputStream inStream = null;
 									OutputStream outStream = null;
 									try{							    		
-							    	    File bfile =new File(newPath + File.pathSeparator + "received" + File.pathSeparator + file.getName());							    		
+							    	    File bfile =new File(newPath + File.separator + "received" + File.separator + file.getName());							    		
+							    	    inStream = new FileInputStream(file);
+							    	    outStream = new FileOutputStream(bfile);							        	
+							    	    byte[] buffer = new byte[1024];							    		
+							    	    int length;
+							    	    //copy the file content in bytes 
+							    	    while ((length = inStream.read(buffer)) > 0){							    	  
+							    	    	outStream.write(buffer, 0, length);							    	 
+							    	    }							    	 
+							    	    inStream.close();
+							    	    outStream.close();							    	    
+							    	    //delete the original file
+							    	    //afile.delete();							    	    
+							    	    System.out.println("File is copied successful!");
+							    	    this.countNum++;
+							    	}catch(IOException e){
+							    	    e.printStackTrace();
+							    	}
+							    	break;
+								}								
+								if (nh != null) { //it has parent nodes
+									Random random = new Random();
+									int k = random.nextInt(20);
+									try
+									{
+									    Thread.sleep(k); //wait for 5ms for waiting replicas
+									}
+									catch(InterruptedException ex)
+									{
+									    Thread.currentThread().interrupt();
+									}
+									
+							    	endpoint.route(nh.getId(), myMessage2, null);
+							    	System.out.println(endpoint.getId()+ " sends the "+ firstPart +" replica to the my parent: " + nh.getId());
+							    	this.countNum = 0;
+							    	break; //use to only send once
+								}
+
+							} catch (FileNotFoundException e) {
+								// TODO Auto-generated catch block
+								e.printStackTrace();
+							}
+						  }
+					}
+				}		  
+		  }else { //here is for parent node: three parts: (1) save received replica from its child; 
+			  	//(2) send all parts to its parent/root
+			  	
+			  	//(1) save received replica from its child
+			  	String newPath= currentPath + File.separator + endpoint.getId().toString().replaceAll("[^a-zA-Z0-9]", "") + File.separator + "received";					  		
+		  		File directory = new File(String.valueOf(newPath));
+		  		if(!directory.exists()){
+		  			new File(newPath).mkdirs();
+		  		}
+				//here send the number of merged parts to its parent or root
+				File[] listOfFiles = directory.listFiles();
+				NodeHandle nh= this.getParent();
+				if (nh != null) {//it has parent
+					this.countNum = this.countNum + ((TreeMessage) message).key + listOfFiles.length;
+					String merge_content = "ok, let send number to parent" + this.countNum;
+					TreeMessage myMessage2 = new TreeMessage(((TreeMessage) message).from, ((TreeMessage) message).numPart, 
+							this.countNum, "merge_value", merge_content, ((TreeMessage) message).time);
+					endpoint.route(nh.getId(), myMessage2, null);
+			    	System.out.println(endpoint.getId()+ " sends the merged value "+ this.countNum +" to the my parent: " + nh.getId());
+			    	this.countNum = 0;
+			    	for (File file : listOfFiles) {
+						file.delete();
+					}
+				}else{//root of the topic
+					this.countNum = this.countNum + ((TreeMessage) message).key + listOfFiles.length;
+					System.out.println("I am root and receive total " +this.countNum+ " parts");
+					if (this.countNum == part_map.size()){
+						//now it already received all parts
+						RootCollectMessage myMessage3 = new RootCollectMessage(this.endpoint.getId(), "receive all", "end", ((TreeMessage) message).time);
+				    	endpoint.route(((TreeMessage) message).from, myMessage3, null);
+				    	System.out.println(endpoint.getId()+ " merge all parts, now send to "
+					    	 		+ " the root node: " + ((TreeMessage) message).from);	
+						this.countNum = 0;
+						for (File file : listOfFiles) {
+							file.delete();
+						}
+					}else{
+						this.countNum = this.countNum - listOfFiles.length;
+					}
+				}				
+				/*
+				// here send the parts to its parents, if has no parent then check if gather all parts
+				File[] listOfFiles = directory.listFiles();
+				NodeHandle nh= this.getParent();
+				if (nh != null) {
+					//(2) send the parts it has to its parent
+					for (File file : listOfFiles) { 
+						
+						Random random = new Random();
+						int k = random.nextInt(30);
+						try
+						{
+						    Thread.sleep(k); //wait for 5ms for waiting replicas
+						}
+						catch(InterruptedException ex)
+						{
+						    Thread.currentThread().interrupt();
+						}
+						
+						String mergeName = file.getName();
+						String[] parts = mergeName.split("_");						
+						try {
+							String merge_content = new Scanner(file).useDelimiter("\\Z").next();
+							TreeMessage myMessage2 = new TreeMessage(((TreeMessage) message).from, ((TreeMessage) message).numPart, 
+									Integer.parseInt(parts[1]), parts[1], merge_content, ((TreeMessage) message).time);
+							endpoint.route(nh.getId(), myMessage2, null);
+					    	System.out.println(endpoint.getId()+ " sends the merged "+ Integer.parseInt(parts[1]) +" replica to the my parent: " + nh.getId());
+					    	file.delete(); //already send the merged part, so delete it
+						} catch (FileNotFoundException e) {
+							// TODO Auto-generated catch block
+							e.printStackTrace();
+						}
+						
+					}
+					//(2) send info to its root	of topic
+				}else{
+					if (listOfFiles.length == part_map.size() ){  //(((TreeMessage) message).numPart +1)
+						// it is root of the tree and receives all parts					
+						//String final_message = new Scanner(file).useDelimiter("\\Z").next();
+						for (File file : listOfFiles) { 
+							file.delete();//now root of the tree can delete all
+						}
+						RootCollectMessage myMessage3 = new RootCollectMessage(((TreeMessage) message).from, "receive all", "end", ((TreeMessage) message).time);
+				    	endpoint.route(((TreeMessage) message).from, myMessage3, null);
+				    	System.out.println(endpoint.getId()+ " merge all parts, now send to "
+					    	 		+ " the root node: " + ((TreeMessage) message).from);				
+				    	
+					}
+					
+				}
+				*/
+		  }					
+	}			
+	  /*
+	   * TreeMessage is used for tree-parallel recovery
+	   * This is one unfinished version, need to be modified later
+	   */
+	  /*
+	  if (message instanceof TreeMessage) {
+		  //here is for child node received msg from root, then send specific replica to its parents
+		  // used for tree-based recovery
+		  if ( ((TreeMessage) message).mergeName == null){ // leaf nodes or parent nodes that have parts
+			  	String newPath = currentPath + File.separator + endpoint.getId().toString().replaceAll("[^a-zA-Z0-9]", "");
+				//for the first node who has the first part, just send to next
+				File directory = new File(newPath);
+				File[] listOfFiles = directory.listFiles();
+				for (File file : listOfFiles) { 
+					String fileName = file.getName();
+					String[] parts = fileName.split("_");
+					if(parts.length > 1) { // means it has the "part"
+						  int firstPart = Integer.parseInt(parts[1])/10;// get the xx value of partxx
+						  
+						  if (firstPart == ((TreeMessage) message).key ) { //find the part that should send to its parent
+							  try {
+								String content_new = new Scanner(file).useDelimiter("\\Z").next();
+								String partName = parts[1];
+								TreeMessage myMessage2 = new TreeMessage(((TreeMessage) message).from, ((TreeMessage) message).numPart, firstPart, partName, content_new, ((TreeMessage) message).time);
+								NodeHandle nh= this.getParent();
+								
+								if (nh == null) {//here it is the root of the tree, may not be the root of this topic, so it moves the replica to received path
+									System.out.println(endpoint.getId()+ " I have no parent, so I just move my file: "+ file.getName());
+									String move_newPath= newPath + File.separator + "received";					  		
+							  		File move_directory = new File(String.valueOf(move_newPath));
+							  		if(!move_directory.exists()){
+							  			new File(move_newPath).mkdirs();
+							  		}
+									//file.renameTo(new File(newPath +"\\received\\" + file.getName()));
+									
+									InputStream inStream = null;
+									OutputStream outStream = null;
+									try{							    		
+							    	    File bfile =new File(newPath + File.separator + "received" + File.separator + file.getName());							    		
 							    	    inStream = new FileInputStream(file);
 							    	    outStream = new FileOutputStream(bfile);							        	
 							    	    byte[] buffer = new byte[1024];							    		
@@ -446,10 +668,21 @@ public void deliver (Id id, Message message) {
 							    	}
 							    	
 								}								
-								if (nh != null) { //leaf node
+								if (nh != null) { //it has parent nodes
+									Random random = new Random();
+									int k = random.nextInt(10);
+									try
+									{
+									    Thread.sleep(k); //wait for 5ms for waiting replicas
+									}
+									catch(InterruptedException ex)
+									{
+									    Thread.currentThread().interrupt();
+									}
+									
 							    	endpoint.route(nh.getId(), myMessage2, null);
 							    	System.out.println(endpoint.getId()+ " sends the "+ firstPart +" replica to the my parent: " + nh.getId());
-							    	break;
+							    	break; //use to only send once
 								}
 
 							} catch (FileNotFoundException e) {
@@ -463,13 +696,14 @@ public void deliver (Id id, Message message) {
 			  	//(2) merge replica that it can merge; (3) send all parts to its parent/root
 			  	
 			  	//(1) save received replica from its child
-			  	String newPath= currentPath + File.pathSeparator + endpoint.getId().toString().replaceAll("[^a-zA-Z0-9]", "") + "\\received";					  		
+			  	String newPath= currentPath + File.separator + endpoint.getId().toString().replaceAll("[^a-zA-Z0-9]", "") + File.separator + "received";					  		
 		  		File directory = new File(String.valueOf(newPath));
 		  		if(!directory.exists()){
 		  			new File(newPath).mkdirs();
 		  		}
 		  		FileWriter fw;
-		  		String fileName = newPath + File.pathSeparator + "receivedMerge_" + ((TreeMessage) message).mergeName;
+		  		String fileName = newPath + File.separator + "receivedMerge_" + ((TreeMessage) message).mergeName ;
+		  		//String fileName = newPath + File.separator +  ((TreeMessage) message).mergeName;
 				try {
 					fw = new FileWriter(fileName, false);
 					BufferedWriter bw = new BufferedWriter(fw);
@@ -481,8 +715,11 @@ public void deliver (Id id, Message message) {
 					// TODO Auto-generated catch block
 					e.printStackTrace();
 				}
+					
+				//================================================================================
 				//(2) merge replica that it can merge
 				//here set a threshold for waiting a moment to wait for others children's replica
+				
 				try
 				{
 				    Thread.sleep(5); //wait for 5ms for waiting replicas
@@ -492,9 +729,9 @@ public void deliver (Id id, Message message) {
 				    Thread.currentThread().interrupt();
 				}
 				try {
-					TreeFileMerge file = new TreeFileMerge(newPath);
+					TreeStateMerge file = new TreeStateMerge(newPath);
 					System.out.println(endpoint.getId()+ " :Start to merge the replicas!");
-					file.fileMerger();
+					file.stateMerger();
 					System.out.println(endpoint.getId()+ " :Already merge the replicas!");
 				} catch (IOException e) {
 					// TODO Auto-generated catch block
@@ -502,6 +739,7 @@ public void deliver (Id id, Message message) {
 				}	  
 								
 				//(3) send all parts to its parent/root
+				
 				File[] listOfFiles = directory.listFiles();
 				for (File file : listOfFiles) { 
 					String mergeName = file.getName();
@@ -516,6 +754,7 @@ public void deliver (Id id, Message message) {
 						    	endpoint.route(((TreeMessage) message).from, myMessage3, null);
 						    	System.out.println(endpoint.getId()+ " merge all parts, now send to "
 							    	 		+ " the root node: " + ((TreeMessage) message).from);
+						    	file.delete();//already send the merged part, so delete it
 						    	break;
 							} catch (FileNotFoundException e) {
 								// TODO Auto-generated catch block
@@ -524,11 +763,12 @@ public void deliver (Id id, Message message) {
 						}
 						try {
 							String merge_content = new Scanner(file).useDelimiter("\\Z").next();
-							TreeMessage myMessage2 = new TreeMessage(((TreeMessage) message).from, Integer.parseInt(parts[4]), mergeName, merge_content, ((TreeMessage) message).time);
+							TreeMessage myMessage2 = new TreeMessage(((TreeMessage) message).from, 0, Integer.parseInt(parts[4]), mergeName, merge_content, ((TreeMessage) message).time);
 							NodeHandle nh= this.getParent();
 							if (nh != null) {
 								endpoint.route(nh.getId(), myMessage2, null);
 						    	System.out.println(endpoint.getId()+ " sends the merged "+ Integer.parseInt(parts[4]) +" replica to the my parent: " + nh.getId());
+						    	file.delete(); //already send the merged part, so delete it
 							}
 					    } catch (FileNotFoundException e) {
 							// TODO Auto-generated catch block
@@ -538,7 +778,7 @@ public void deliver (Id id, Message message) {
 						//int firstPart = Integer.parseInt(parts[1])/10;// get the xx value of partxx
 						try {
 							String merge_content = new Scanner(file).useDelimiter("\\Z").next();
-							TreeMessage myMessage3 = new TreeMessage(this.endpoint.getId(), Integer.parseInt(parts[1]), mergeName, merge_content, ((TreeMessage) message).time);
+							TreeMessage myMessage3 = new TreeMessage(this.endpoint.getId(), 0, Integer.parseInt(parts[1]), mergeName, merge_content, ((TreeMessage) message).time);
 							NodeHandle nh= this.getParent();
 							if (nh != null) {
 								endpoint.route(nh.getId(), myMessage3, null);
@@ -550,21 +790,23 @@ public void deliver (Id id, Message message) {
 						}
 					}
 				}
+				 
 			  }
-		  		  
-	  }
+			 
+		  }	
+	  */
 	  if (message instanceof LinearCollectMessage){		  	
 			/*
-			 * Here is for linear recovery
+			 * Here is for line recovery
 			 * -------------------------------------------------------------------------------
-			 * send to next: linear recovery
+			 * send to next: line recovery
 			 */
 		  	System.out.println("===================&&&&& Linear Collection &&&&&&==============================");
-		  	String newPath = currentPath + File.pathSeparator + endpoint.getId().toString().replaceAll("[^a-zA-Z0-9]", "");
+		  	String newPath = currentPath + File.separator + endpoint.getId().toString().replaceAll("[^a-zA-Z0-9]", "");
 			//for the first node who has the first part, just send to next
 			File directory = new File(newPath);
 			File[] listOfFiles = directory.listFiles();
-			int former_key = 0;
+			int former_key = ((LinearCollectMessage) message).key;
 			String content_old = ((LinearCollectMessage) message).content, content_new = null;
 			for (File file : listOfFiles) { 
 				String fileName = file.getName();
@@ -576,6 +818,7 @@ public void deliver (Id id, Message message) {
 						  try {
 							content_new = new Scanner(file).useDelimiter("\\Z").next();
 							content_old = content_old + content_new;
+							//file.delete();
 						} catch (FileNotFoundException e) {
 							// TODO Auto-generated catch block
 							e.printStackTrace();
@@ -587,6 +830,7 @@ public void deliver (Id id, Message message) {
 							content_old = content_old + content_new;
 							former_key = firstPart;
 							System.out.println("=HeyHeyHey: now I have the part " + former_key);
+							//file.delete();
 							//break;
 						} catch (FileNotFoundException e) {
 							// TODO Auto-generated catch block
@@ -639,26 +883,6 @@ public void deliver (Id id, Message message) {
 		  }else{ // maybe the parent or leaf
 			 int numChild = this.myScribe.numChildren(myTopic);
 			 if (numChild != 0){ // parent nodes
-				 //long receiveTime = System.currentTimeMillis();
-				 //nodeValue = nodeValue + ((TimeMessage) message).time;
-				 //System.out.println(endpoint.getId()+" : receive the msg from my child " +((TimeMessage) message).from + " takes " + (receiveTime - ((TimeMessage) message).time )); 
-				 /*
-				 FileWriter fw;
-					try {
-						fw = new FileWriter("/home/cop5614-student/ParentReceiveTime.txt", true);
-						BufferedWriter bw = new BufferedWriter(fw);
-					    PrintWriter out = new PrintWriter(bw);
-						 
-					    //out.println(endpoint.getId()+" : receive the msg from child  " +((TimeMessage) message).from + " takes " + (receiveTime - ((TimeMessage) message).time ) );
-					    out.println(endpoint.getId()+" : receive the msg from child total " +  ((TimeMessage) message).time  );
-						
-					    out.close();
-					    
-					} catch (IOException e) {
-						// TODO Auto-generated catch block
-						e.printStackTrace();
-					}
-					*/
 					//long receiveChildTime = System.currentTimeMillis();
 			    	sendtoParent(((TimeMessage) message).from, ((TimeMessage) message).time);
 			 }
@@ -672,44 +896,12 @@ public void deliver (Id id, Message message) {
    * here the root node send message to all its children nodes
  * @throws IOException 
    */
-  public void sendMultiCast() throws IOException {
-	  
+  public void sendMultiCast() throws IOException {	  
 	  //System.out.println("---------------------------------------------------------------------------------------------------------");
 	  System.out.println("Now send the part of file you received to me");
-	  /*
-	  this.countNum = this.countNum + 1;
-	  startTime = System.currentTimeMillis();
-	  FileWriter fw;
-		try {
-			fw = new FileWriter("U:/Eclipse workplace/RootReceiveTime.txt", true);
-			BufferedWriter bw = new BufferedWriter(fw);
-		    PrintWriter out = new PrintWriter(bw);
-			 
-		    out.println("--------------------------------------------------------------------------------------------------" );
-			
-		    out.close();
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-		*/
-	  //Here to output the starttime of sending data block
-	  /**
-	  try{
-		    FileWriter fw = new FileWriter("/home/cop5614-student/RootFinalResult.txt", true);
-			BufferedWriter bw = new BufferedWriter(fw);
-		    PrintWriter out = new PrintWriter(bw);
-		    out.println("--------------------------------------------------------------------------------------------------");
-		    out.println("Root Node ("+this.endpoint.getId()+ ") : The start time of sending data block: " + startTime + " milliseconds");
-			out.close();
-		  } catch (IOException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
-	**/
-	  //String content = new Scanner(new File("/home/cop5614-student/Twitter_Spam_Dataset.arff")).useDelimiter("\\Z").next();
 	  String content = "Hi";
-	  ScribeMessage myMessage = new ScribeMessage(endpoint.getId(), this.endpoint.getId(), content, "aggregation");	  
+	  long anyTime = 12;
+	  ScribeMessage myMessage = new ScribeMessage(endpoint.getId(), this.endpoint.getId(), content, "aggregation", anyTime);	  
 	  //RootVectorMessage myMessage = new RootVectorMessage(endpoint.getLocalNodeHandle(), content, myTopic);	  
 	  myScribe.publish(myTopic, myMessage);
   }
@@ -718,52 +910,9 @@ public void deliver (Id id, Message message) {
    */
   @Override
 public void deliver (Topic topic, ScribeContent content){
-	  //right now let all node who received the part of file send the part to the root or parent
-	  /*
-	  if (this.receivedPart == 1 && this.sendReceivedPart == 0 ) {
-		  this.sendReceivedPart = 1;
-		// find the folder within specific node
-		String newPath= currentPath + "\\" + endpoint.getId().toString().replaceAll("[^a-zA-Z0-9]", "");
-	  	File directory = new File(newPath);
-		File[] listOfFiles = directory.listFiles();
-
-		for (File file : listOfFiles) { 
-			try {
-				String contentPart = new Scanner(file).useDelimiter("\\Z").next();
-				String fileName = file.getName();
-				String extension = fileName; //FilenameUtils.getExtension(fileName);// saves the name of each part
-				//here send the content and name of the part to the root node
-				RootCollectMessage myMessage = new RootCollectMessage(this.endpoint.getId(), contentPart, extension);
-				endpoint.route(((ScribeMessage) content).root, myMessage, null);
-			} catch (FileNotFoundException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
-			
-		  }
-		  //contentPart = new Scanner(new File("/home/cop5614-student/Twitter_Spam_Dataset.arff")).useDelimiter("\\Z").next();
-		  String content1 = endpoint.getId() + "received the part xxx ";
-		  		  		  
-	  }
-	  */
-	  //now let the nodes who have the part send the replica to the parent
-	  /*
-	  if (this.receivedPart == 1) {
-		  //contentPart = new Scanner(new File("/home/cop5614-student/Twitter_Spam_Dataset.arff")).useDelimiter("\\Z").next();
-		  String content1 = endpoint.getId() + "received the part xxx ";
-		  ParentCollectMessage myMessage = new ParentCollectMessage(this.endpoint.getId(), content1);
-		  NodeHandle nh= this.getParent();
-		  long recordtime = System.currentTimeMillis();
-		  if(nh != null){
-			  endpoint.route(nh.getId(), myMessage, nh);
-			  System.out.println("Sned to my parent!");
-		    }
-	  }
-	  */
 	  if (content instanceof ScribeMessage){
 			 //here for each node to save the info about all nodes saves the parts, a tree map for all saved info
-			 System.out.println("========##################========####################=====");
-			 System.out.println(endpoint.getId()+" : receive the info from node " +((ScribeMessage) content).from); 
+			 //System.out.println("========##################========####################====="); 
 			 String partName = ((ScribeMessage) content).content; // here get the string of partxx
 			 String[] parts = partName.split("_");
 			 if(parts.length > 1) {
@@ -777,12 +926,12 @@ public void deliver (Topic topic, ScribeContent content){
 				 if ( list_old != null ) {
 					 list_part.addAll(list_old);  //merge the info of same part into one list
 				 }
-				 System.out.println(list_part);
+				 //System.out.println(list_part);
 				 part_map.put(part_No, list_part);
 			 }
 		  }
 	  if (content instanceof ParentCollectMessage){
-		// this is used for the tree-aggregation partition, not the centralized or linear aggregation
+		// this is used for the tree-aggregation partition, not the star or line aggregation
 		//here for children node send its part to the parent 
 		int numChild = this.myScribe.numChildren(myTopic);
 		if (numChild == 0){ // leaf nodes that may have parts
@@ -874,8 +1023,13 @@ public void deliver (Topic topic, ScribeContent content){
 	      	this.receivedPart = 1;
 	        //here use to publish its received info so that other nodes can get all records
 	  		System.out.println("----------------------------------------------");
-	  		System.out.println(this.endpoint.getId()+" : Hey, now please records my saved info");
-	  		System.out.println(this.endpoint.getId()+" : the Part name is : " + ((ScribeMessage) arg1).partName);
+	  		long receivedReplicaTime = System.currentTimeMillis();
+	  		this.countReplica++;
+	  		System.out.println(this.endpoint.getId()+" : Hey, now please records my saved info: " + ((ScribeMessage) arg1).partName
+	  				+ ", I already have " + countReplica);
+	  		long saveTime = receivedReplicaTime - ((ScribeMessage) arg1).time;
+	  		System.out.println(this.endpoint.getId()+" receive the state takes " + saveTime);
+	  		//System.out.println(this.endpoint.getId()+" : the Part name is : " + ((ScribeMessage) arg1).partName);
 	  		System.out.println("----------------------------------------------");
 	  		// save the received part into its own folder
 	  		String newPath= currentPath + File.separator + endpoint.getId().toString().replaceAll("[^a-zA-Z0-9]", "");
@@ -900,7 +1054,8 @@ public void deliver (Topic topic, ScribeContent content){
 	  		
 	  		
 	  		String content = ((ScribeMessage) arg1).partName;
-	  		ScribeMessage myMessage = new ScribeMessage(this.endpoint.getId(), this.endpoint.getId(), content, content);
+	  		long anyTime = 12;
+	  		ScribeMessage myMessage = new ScribeMessage(this.endpoint.getId(), this.endpoint.getId(), content, content, anyTime);
 	  		//braodcast to all nodes in the same topic, so that all nodes have a copy of saved info
 	  		myScribe.publish(myTopic, myMessage);
         }
@@ -908,7 +1063,22 @@ public void deliver (Topic topic, ScribeContent content){
       return returnValue;
 
   }
-  
+ 
+ Integer recoverySelection (String appName, int num, int length, String latencyRequire){
+	 //here is for selecting different structures, can be redefined by users or developer
+	 if (num < 16*1024){ //can be changed due to different requirements
+		 return 1; //here is for star-structured recovery
+		 
+	 }else if (length > 128){// here is the length of recovery path, can be redefined
+		 return 2; //here is for line-structured recovery
+	 }else if (latencyRequire == "No"){
+		 // here is the requirement of runtime latency, can be changed by users	 
+		 return 2;
+	 }else {
+		 return 3;//here is for tree-structured recovery
+	 }
+	 	 
+ }  
   
   @Override
 public void subscribeFailed(Topic topic){
@@ -947,7 +1117,7 @@ public boolean isRoot() {
 }
 public NodeHandle[] getChildren() {
 	// TODO Auto-generated method stub
-	return myScribe.getChildren(myTopic); 
+	return myScribe.getChildren(myTopic);   
 }
 
 

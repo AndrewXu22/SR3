@@ -15,11 +15,14 @@ public class ScribeMessage implements ScribeContent, Message {
 	
 	String partName;
 	
-	public ScribeMessage(Id id, Id root, String content, String partName){
+	long time;
+	
+	public ScribeMessage(Id id, Id root, String content, String partName, long time){
 		this.from = id;
 		this.root = root;
 		this.content = content;
 		this.partName = partName;
+		this.time = time;
 		
 	}
 	/*

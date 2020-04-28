@@ -104,7 +104,7 @@ public class pastry_main {
 	    Iterator<MultipleNodeApplication> i = apps.iterator();
 	    MultipleNodeApplication app = (MultipleNodeApplication) i.next();
 	    app.subscribe();
-	    env.getTimeSource().sleep(20000);
+	    env.getTimeSource().sleep(5000);
 	    app.startPublishTask();
 	    // for all the rest just subscribe
 	    while (i.hasNext()) {
@@ -113,8 +113,8 @@ public class pastry_main {
 	    }
 	    
 	 // now, print the tree
-	    env.getTimeSource().sleep(2000);
-	    printTree(apps);
+	    //env.getTimeSource().sleep(2000);
+	   // printTree(apps);
   }
   
   /**

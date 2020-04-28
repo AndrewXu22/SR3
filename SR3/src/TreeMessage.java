@@ -11,14 +11,16 @@ public class TreeMessage implements ScribeContent, Message {
  
 	Id from;
 	
+	int numPart;
 	int key;
 	String mergeName;
 	String content;
 	long time;
 	
-	public TreeMessage(Id id, Integer key, String mergeName, String content, long time){
+	public TreeMessage(Id id, Integer totalPart, Integer key, String mergeName, String content, long time){
 		this.from = id;
 		this.key = key;
+		this.numPart = totalPart;
 		this.mergeName = mergeName;
 		this.content = content;
 		this.time = time;

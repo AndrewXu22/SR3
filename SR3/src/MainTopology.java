@@ -17,12 +17,12 @@ public class MainTopology {
         LocalCluster cluster = new LocalCluster();
         try {
             cluster.submitTopology("HelloTopology", config, builder.createTopology());
-            Thread.sleep(5000);
+            Thread.sleep(1000);
         } catch (Exception e){
             e.printStackTrace();
         }
         finally {
-            cluster.shutdown();
+            //cluster.shutdown();
         }
     }
 }
