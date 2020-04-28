@@ -1,4 +1,4 @@
-# Welcome to SR3: customizable recovery for stateful stream applications
+# Welcome to SR3: Customizable Recovery for Stateful Stream Processing Systems
 
 ## Runtime Environment:
 
